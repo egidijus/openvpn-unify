@@ -1,0 +1,53 @@
+#!/bin/bash
+# openvpn-unify
+# Author: Egidijus Ligeika
+# License: share, reuse, modify, use commercially, should give attribution 
+# 
+# purpose: this script will create a unified open-vpn configuration file from server and user certificates and keys.
+# the end user will have one file to manage and to use for connecting to the open-vpn server.
+# 
+# usage: openvpn-unify <common-name-of-certificate>
+
+# Set variables
+keyName="$1"
+
+# Set working directories
+keyHome="/etc/openvpn/keys"
+templateHome="/etc/openvpn/easy-rsa"
+binHome="$templateHome"
+
+# Test environment
+#keyHome="/root/openvpn-unified"
+#templateHome="/root/openvpn-unified"
+#binHome="$templateHome"
+
+# Extract key info from files
+# this produces multi-line output
+a=$(cat $keyHome/ca.crt | awk '/BEGIN CERTIFICATE/,/^$/' | tr '\n' "\\n")
+b=$(cat $keyHome/$keyName.crt | awk '/BEGIN CERTIFICATE/,/^$/' | tr '\n' "\\n")
+c=$(cat $keyHome/$keyName.key | awk '/PRIVATE/,/^$/' | tr '\n' "\\n")
+d=$(cat $keyHome/ta.key | awk '/BEGIN/,/^$/' | tr '\n' "\\n")
+
+# Make the above output sed friendly and store in variables
+# this way a new line is not an argument to sed
+ased="$(echo "${a}" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/\$/\\$/g')"
+bsed="$(echo "${b}" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/\$/\\$/g')"
+csed="$(echo "${c}" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/\$/\\$/g')"
+dsed="$(echo "${d}" | sed ':a;N;$!ba;s/\n/\\n/g' | sed 's/\$/\\$/g')"
+
+# Create a working file from template
+mkdir -p "/tmp/$keyName"
+cp "$templateHome/template.ovpn" "/tmp/${keyName}.ovpn"
+
+# Use key output and template to create completed unified config
+sed -i "/<ca>/a${ased}" "/tmp/${keyName}.ovpn"
+sed -i "/<cert>/a${bsed}" "/tmp/${keyName}.ovpn"
+sed -i "/<key>/a${csed}" "/tmp/${keyName}.ovpn"
+sed -i "/<tls-auth>/a${dsed}" "/tmp/${keyName}.ovpn"
+
+# Copy Back the unified config
+cp "/tmp/${keyName}.ovpn" .
+
+# Clean up
+rm -Rf "/tmp/$keyName"
+
